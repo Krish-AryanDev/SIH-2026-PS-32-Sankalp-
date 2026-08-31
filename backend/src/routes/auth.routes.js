@@ -3,6 +3,6 @@ const { registerFarmer } = require("../controller/auth.controller")
 
 const router = express.Router()
 
-router.post("/register", registerFarmer);
+router.get("/register", registerFarmer);
 
 module.exports = router
