@@ -1,4 +1,9 @@
 const farmerModel = require("../models/farmer.model")
+const otpModel = require("../models/otp.model")
+
+const generateOTP = () => {
+    return Math.floor(1000 + Math.random() * 9000).toString(); // Generates a 4-digit OTP
+}
 
 const registerFarmer = async (req, res) => {
     try{
@@ -25,8 +30,29 @@ const registerFarmer = async (req, res) => {
         }
 
         if(existingFarmer){
+
+            const phoneNumber = existingFarmer.phoneNumber;
+            const otp = generateOTP();
+            const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+            await otpModel.findOneAndUpdate(
+                { phoneNumber },
+                {
+                    otp,
+                    expiresAt
+                },
+                {
+                    upsert: true,
+                    returnDocument: 'after'
+                }
+            );
+
+            /*await smsProvider.send(phoneNumber, `Your OTP is: ${otp}. It will expire in 5 minutes.`); */
+
+            
+
             return res.status(200).json({
-                message: "Farmer is present in the database",
+                message: "otp sent successfully",
                 present: true
             })
         }else{
