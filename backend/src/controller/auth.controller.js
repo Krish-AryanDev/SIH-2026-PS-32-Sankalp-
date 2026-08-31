@@ -69,4 +69,39 @@ const registerFarmer = async (req, res) => {
     }
 }
 
-module.exports = { registerFarmer }
+const verifyOTP = async (req, res) => {
+    try{
+        const { phoneNumber, otp } = req.body
+
+        if(!phoneNumber || !otp){
+            return res.status(400).json({
+                message: "phoneNumber and otp are required",
+                success: false
+            })
+        }
+
+        const existingOTP = await otpModel.findOne({phoneNumber, otp})
+
+        if(!existingOTP){
+            return res.status(400).json({
+                message: "OTP is invalid or expired",
+                success: false
+            })
+        }
+
+        await otpModel.deleteOne({phoneNumber, otp}) // Delete the OTP after successful verification
+
+        return res.status(200).json({
+            message: "otp verified successfully",
+            success: true
+        })
+
+    }catch (e) {
+        res.status(500).json({
+            message: "Error verifying OTP",
+            error: e.message
+        })
+    }
+}
+
+module.exports = { registerFarmer , verifyOTP }
