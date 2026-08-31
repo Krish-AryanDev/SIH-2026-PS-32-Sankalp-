@@ -1,9 +1,13 @@
 const farmerModel = require("../models/farmer.model")
 const otpModel = require("../models/otp.model")
 
+{/*  This function generates OTP*/}
+
 const generateOTP = () => {
     return Math.floor(1000 + Math.random() * 9000).toString(); // Generates a 4-digit OTP
 }
+
+{/* This function is connected to to /register route and checks if the userData is present in the database and sends them OTP for verification*/}
 
 const registerFarmer = async (req, res) => {
     try{
@@ -68,6 +72,8 @@ const registerFarmer = async (req, res) => {
         })
     }
 }
+
+{/* This function is connected to /verify-otp route and verifies OTP*/}
 
 const verifyOTP = async (req, res) => {
     try{
