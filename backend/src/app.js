@@ -1,19 +1,12 @@
 const express = require("express")
-const testModel = require("./models/test.model")
+const cors = require("cors")
+const testRoutes = require("./routes/test.routes")
 
 
 const app = express()
-
+app.use(cors())
 app.use(express.json())
 
-app.post("/test", async(req, res) => {
-    const { title, description } = req.body
-
-    testModel.create({ title : title, description: description })
-
-    res.status(201).json({
-        message: "Test created successfully"
-    })
-})
+app.use("/api", testRoutes)
 
 module.exports = app
