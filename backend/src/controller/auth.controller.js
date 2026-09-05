@@ -98,9 +98,39 @@ const verifyOTP = async (req, res) => {
 
         await otpModel.deleteOne({phoneNumber, otp}) // Delete the OTP after successful verification
 
+        // Find the farmer associated with this phone number
+        const farmer = await farmerModel.findOne({ phoneNumber });
+        if (!farmer) {
+            return res.status(404).json({
+                message: "Farmer record not found",
+                success: false
+            });
+        }
+
+        // Generate JWT token with farmer identity
+        const token = jwt.sign(
+            {
+                id: farmer._id,
+                farmerID: farmer.farmerID,
+                phoneNumber: farmer.phoneNumber
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
         return res.status(200).json({
             message: "otp verified successfully",
-            success: true
+            success: true,
+            token,
+            farmer: {
+                id: farmer._id,
+                farmerID: farmer.farmerID,
+                Name: farmer.Name,
+                phoneNumber: farmer.phoneNumber,
+                city: farmer.city,
+                state: farmer.state,
+                pincode: farmer.pincode
+            }
         })
 
     }catch (e) {
@@ -111,4 +141,22 @@ const verifyOTP = async (req, res) => {
     }
 }
 
-module.exports = { registerFarmer , verifyOTP }
+{/* This function is connected to /me route and returns the authenticated farmer's profile */}
+
+const getMe = async (req, res) => {
+    try {
+        // req.farmer is already populated by authMiddleware
+        return res.status(200).json({
+            message: "Profile retrieved successfully",
+            success: true,
+            farmer: req.farmer
+        });
+    } catch (e) {
+        res.status(500).json({
+            message: "Error fetching profile",
+            error: e.message
+        });
+    }
+}
+
+module.exports = { registerFarmer, verifyOTP, getMe }

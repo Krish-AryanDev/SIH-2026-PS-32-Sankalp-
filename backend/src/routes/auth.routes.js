@@ -1,9 +1,11 @@
 const express = require("express")
-const { registerFarmer , verifyOTP } = require("../controller/auth.controller")
+const { registerFarmer, verifyOTP, getMe } = require("../controller/auth.controller")
+const authMiddleware = require("../middlewares/auth.middleware")
 
 const router = express.Router()
 
-router.get("/register", registerFarmer);
-router.get("/verify-otp", verifyOTP);
+router.post("/register", registerFarmer);
+router.post("/verify-otp", verifyOTP);
+router.get("/me", authMiddleware, getMe);
 
 module.exports = router
