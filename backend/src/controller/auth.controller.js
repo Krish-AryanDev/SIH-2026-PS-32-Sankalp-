@@ -1,5 +1,6 @@
 const farmerModel = require("../models/farmer.model")
 const otpModel = require("../models/otp.model")
+const jwt = require("jsonwebtoken")
 
 {/*  This function generates OTP*/}
 
