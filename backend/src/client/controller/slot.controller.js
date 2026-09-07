@@ -167,7 +167,7 @@ async function check_availability(req, res) {
   };
 
   const WEIGHTS = {
-    small: { alpha: 0.7, beta: 0.2, crowdMultiplier: 1.0 },
+    small: { alpha: 0.7, beta: 0.3, crowdMultiplier: 1.0 },
     medium: { alpha: 0.6, beta: 0.4, crowdMultiplier: 1.5 },
     large: { alpha: 0.4, beta: 0.6, crowdMultiplier: 2.5 },
   };
@@ -183,9 +183,7 @@ async function check_availability(req, res) {
   }
 
   function getEffectiveAvailable(slot) {
-    const totalCapacity = slot.available + slot.booked;
-    const bufferReserve = totalCapacity * BUFFER_PERCENT;
-    return slot.available - bufferReserve;
+    return slot.available * (1 - BUFFER_PERCENT);
   }
 
   /**
@@ -230,8 +228,9 @@ async function check_availability(req, res) {
     }
 
     const loadBalancePct = (loadBalance / capacity) * 100;
-    
-    const crowdPenalty = popularity * weights.crowdMultiplier * 100;
+
+    const crowdPenalty =
+      Math.min(popularity * weights.crowdMultiplier, 1) * 100;
 
     return weights.alpha * loadBalancePct + weights.beta * crowdPenalty;
   }
@@ -259,7 +258,7 @@ async function book(req, res) {
       const minQty = parseFloat(minQtyStr);
       const maxQty = parseFloat(maxQtyStr);
       const avgQty = (minQty + maxQty) / 2;
-
+      console.log("PARSED VALUES:", { qtyrange, minQty, maxQty, avgQty }); // add this line
       if (isNaN(minQty) || isNaN(maxQty) || minQty <= 0 || maxQty <= 0) {
         return res.status(400).json({
           message: "Invalid qtyrange. Use 'min-max' (e.g., '2.5-3.0')",
@@ -280,12 +279,12 @@ async function book(req, res) {
         .eq("center_code", centercode)
         .eq("date", date)
         .eq("crop_available", croptype);
-      console.log("BOOK - Query result data:", JSON.stringify(data, null, 2));
-      if (data && data.length > 0) {
-        console.log("BOOK - record:", JSON.stringify(data[0], null, 2));
-        console.log("BOOK - slots type:", typeof data[0].slots);
-        console.log("BOOK - slots keys:", Object.keys(data[0].slots || {}));
-      }
+       console.log("BOOK - Query result data:", JSON.stringify(data, null, 2));
+       if (data && data.length > 0) {
+         console.log("BOOK - record:", JSON.stringify(data[0], null, 2));
+         console.log("BOOK - slots type:", typeof data[0].slots);
+         console.log("BOOK - slots keys:", Object.keys(data[0].slots || {}));
+       }
       if (error) {
         return res.status(500).json({
           message: "Error fetching slot data",
