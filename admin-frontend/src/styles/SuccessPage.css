@@ -1,0 +1,98 @@
+/* Success Page Styles */
+
+.success-page-container {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-image: url('/images/background_theme.jpeg');
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  position: relative;
+  padding: 20px;
+}
+
+.success-page-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(248, 245, 237, 0.45);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.success-card {
+  position: relative;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  border: 1px solid rgba(22, 121, 42, 0.2);
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.08);
+  padding: 40px 36px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.success-paragraph {
+  font-size: 24px;
+  font-weight: 800;
+  color: #16792A;
+  margin-bottom: 16px;
+  letter-spacing: -0.2px;
+}
+
+.admin-session-details {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 20px 0 24px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.detail-label {
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.detail-value {
+  color: #111827;
+  font-weight: 700;
+}
+
+.signout-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background-color: #FFFFFF;
+  color: #374151;
+  border: 1px solid #D1D5DB;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.signout-btn:hover {
+  background-color: #F3F4F6;
+  border-color: #9CA3AF;
+  color: #111827;
+}

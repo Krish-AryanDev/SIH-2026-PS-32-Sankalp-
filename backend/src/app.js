@@ -2,6 +2,7 @@ const express = require("express")
 const cors = require("cors")
 const testRoutes = require("./client/routes/test.routes")
 const authRoutes = require("./client/routes/auth.routes")
+const adminAuthRoutes = require("./admin/routes/auth.routes")
 const slotRoutes = require("./client/routes/slot_book.routes")
 
 const app = express()
@@ -10,6 +11,6 @@ app.use(express.json())
 
 app.use("/api", testRoutes)
 app.use("/api/auth" , authRoutes)
+app.use("/api/admin/auth" , adminAuthRoutes)
 app.use("/api/slot_book" , slotRoutes)
-
 module.exports = app
