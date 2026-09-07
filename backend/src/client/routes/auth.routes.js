@@ -7,5 +7,4 @@ const router = express.Router()
 router.post("/register", registerFarmer);
 router.post("/verify-otp", verifyOTP);
 router.get("/me", authMiddleware, getMe);
-
-module.exports = router
+module.exports = router;
