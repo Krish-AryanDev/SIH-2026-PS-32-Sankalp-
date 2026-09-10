@@ -12,10 +12,18 @@ import {
   ActivityIndicator,
   ScrollView,
   Keyboard,
+  Modal,
 } from 'react-native';
 import { authService } from '../services/authService';
+import { AVAILABLE_LANGUAGES, getTranslations } from '../config/translations';
 
-export default function LoginScreen({ onLoginSuccess }) {
+export default function LoginScreen({
+  language = 'en',
+  onLanguageChange,
+  onLoginSuccess,
+}) {
+  const t = getTranslations(language);
+  const [isLangModalVisible, setIsLangModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('aadhar'); // 'aadhar' | 'kisan'
   const [userData, setUserData] = useState('');
   const [otp, setOtp] = useState('');
@@ -78,12 +86,12 @@ export default function LoginScreen({ onLoginSuccess }) {
     // Client-side format validations matching backend logic
     if (activeTab === 'aadhar') {
       if (trimmedData.length !== 12) {
-        setErrorMessage('Please enter a valid 12-digit Aadhar Number.');
+        setErrorMessage(t.validAadharError);
         return;
       }
     } else {
       if (trimmedData.length !== 11) {
-        setErrorMessage('Please enter a valid 11-digit Kisan ID.');
+        setErrorMessage(t.validKisanError);
         return;
       }
     }
@@ -96,7 +104,7 @@ export default function LoginScreen({ onLoginSuccess }) {
       if (response.success && response.present) {
         setIsOtpSent(true);
         setRegisteredPhone(response.phoneNumber || '');
-        setSuccessMessage(`OTP sent successfully to registered number.`);
+        setSuccessMessage(t.otpSentSuccess);
         setResendCountdown(30); // 30-second cooldown
         // Focus OTP field after a short delay
         setTimeout(() => {
@@ -104,30 +112,31 @@ export default function LoginScreen({ onLoginSuccess }) {
             otpInputRef.current.focus();
           }
         }, 300);
-      } else if (response.present === false) {
-        setErrorMessage('Farmer not found in the database. Please verify your ID.');
       } else {
-        setErrorMessage(response.message || 'Failed to send OTP. Please try again.');
+        setErrorMessage(
+          response.message || 'Unable to find farmer details. Please verify your number.'
+        );
       }
     } catch (err) {
-      setErrorMessage('An unexpected error occurred. Please try again.');
+      setErrorMessage('Network request failed. Please check your connection.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Step 2: Verify OTP via backend /api/auth/verify-otp
+  // Step 2: Verify OTP with backend /api/auth/verify-otp
   const handleVerifyOtp = async () => {
     Keyboard.dismiss();
     setErrorMessage('');
+    setSuccessMessage('');
 
-    if (!otp || otp.length < 4) {
-      setErrorMessage('Please enter the 4-digit OTP sent to your phone.');
+    if (otp.length < 4) {
+      setErrorMessage(t.validOtpError);
       return;
     }
 
     if (!registeredPhone) {
-      setErrorMessage('Session expired. Please request a new OTP.');
+      setErrorMessage(t.sessionExpiredError);
       return;
     }
 
@@ -185,6 +194,19 @@ export default function LoginScreen({ onLoginSuccess }) {
         <Text style={styles.bgWheatRight}>🌾🌾</Text>
       </View>
 
+      {/* TOP BAR WITH LANGUAGE SELECTOR */}
+      <View style={styles.topLanguageRow}>
+        <TouchableOpacity
+          style={styles.loginLangPill}
+          onPress={() => setIsLangModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.loginLangGlobe}>🌐</Text>
+          <Text style={styles.loginLangText}>{t.langLabel}</Text>
+          <Text style={styles.loginLangArrow}>▾</Text>
+        </TouchableOpacity>
+      </View>
+
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -202,13 +224,13 @@ export default function LoginScreen({ onLoginSuccess }) {
               <Text style={styles.logoShield}>🛡️</Text>
             </View>
             <View style={styles.logoTextContainer}>
-              <Text style={styles.logoTitle}>Kisan Mitra</Text>
-              <Text style={styles.logoSubtitle}>किसान मित्र | Farmer Portal</Text>
+              <Text style={styles.logoTitle}>{t.portalTitle}</Text>
+              <Text style={styles.logoSubtitle}>{t.portalSubtitle}</Text>
             </View>
           </View>
 
           {/* HEADER SECTION */}
-          <Text style={styles.screenTitle}>Farmer Login</Text>
+          <Text style={styles.screenTitle}>{t.loginHeader}</Text>
 
           {/* TAB TOGGLE SECTION */}
           <View style={styles.toggleContainer}>
@@ -226,7 +248,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                 🪪
               </Text>
               <Text style={activeTab === 'aadhar' ? styles.activeToggleText : styles.inactiveToggleText}>
-                {' '}Aadhar
+                {' '}{t.aadharTab}
               </Text>
             </TouchableOpacity>
 
@@ -244,7 +266,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                 🚜
               </Text>
               <Text style={activeTab === 'kisan' ? styles.activeToggleText : styles.inactiveToggleText}>
-                {' '}Kisan ID
+                {' '}{t.kisanTab}
               </Text>
             </TouchableOpacity>
           </View>
@@ -253,11 +275,11 @@ export default function LoginScreen({ onLoginSuccess }) {
           <View style={styles.inputSection}>
             <View style={styles.labelRow}>
               <Text style={styles.inputLabel}>
-                {activeTab === 'aadhar' ? 'Aadhar Number (12 digits)' : 'Kisan ID (11 digits)'}
+                {activeTab === 'aadhar' ? t.enterAadharLabel : t.enterKisanLabel}
               </Text>
               {isOtpSent && (
                 <TouchableOpacity onPress={handleReset} style={styles.changeButton}>
-                  <Text style={styles.changeButtonText}>✏️ Change</Text>
+                  <Text style={styles.changeButtonText}>{t.changeNumberButton}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -272,8 +294,8 @@ export default function LoginScreen({ onLoginSuccess }) {
                 style={[styles.textInput, isOtpSent && styles.textInputLocked]}
                 placeholder={
                   activeTab === 'aadhar'
-                    ? 'Enter your 12-digit Aadhar Number'
-                    : 'Enter your 11-digit Kisan ID'
+                    ? t.enterAadharPlaceholder
+                    : t.enterKisanPlaceholder
                 }
                 placeholderTextColor="#7A8B7A"
                 keyboardType="number-pad"
@@ -286,23 +308,23 @@ export default function LoginScreen({ onLoginSuccess }) {
               />
               {isOtpSent && (
                 <View style={styles.lockBadge}>
-                  <Text style={styles.lockBadgeText}>✓ Entered</Text>
+                  <Text style={styles.lockBadgeText}>✓</Text>
                 </View>
               )}
             </View>
           </View>
 
-          {/* OTP INPUT SECTION - APPEARS DIRECTLY BELOW USER DATA BOX */}
+          {/* OTP INPUT SECTION */}
           {isOtpSent && (
             <View style={styles.otpSection}>
               {/* OTP Info banner */}
               <View style={styles.otpNotificationPill}>
                 <Text style={styles.otpNotificationText}>
-                  📩 OTP sent to {formatMaskedPhone(registeredPhone)}
+                  📩 {t.otpSentTo} {formatMaskedPhone(registeredPhone)}
                 </Text>
               </View>
 
-              <Text style={styles.inputLabel}>Enter 4-Digit OTP</Text>
+              <Text style={styles.inputLabel}>{t.otpSentTo}</Text>
               
               <View style={styles.inputContainer}>
                 <View style={styles.inputIconWrapper}>
@@ -311,12 +333,12 @@ export default function LoginScreen({ onLoginSuccess }) {
                 <TextInput
                   ref={otpInputRef}
                   style={[styles.textInput, styles.otpTextInput]}
-                  placeholder="• • • •"
+                  placeholder={t.enterOtpPlaceholder}
                   placeholderTextColor="#7A8B7A"
                   keyboardType="number-pad"
                   returnKeyType="done"
                   onSubmitEditing={handleVerifyOtp}
-                  maxLength={4}
+                  maxLength={6}
                   value={otp}
                   onChangeText={handleOtpChange}
                   editable={!isVerifying}
@@ -327,7 +349,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               <View style={styles.resendRow}>
                 {resendCountdown > 0 ? (
                   <Text style={styles.resendCountdownText}>
-                    Resend OTP in <Text style={styles.boldTimer}>{resendCountdown}s</Text>
+                    {t.resendOtpIn} <Text style={styles.boldTimer}>{resendCountdown}s</Text>
                   </Text>
                 ) : (
                   <TouchableOpacity
@@ -335,7 +357,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                     disabled={isLoading}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.resendActionText}>🔄 Resend OTP</Text>
+                    <Text style={styles.resendActionText}>{t.resendOtpButton}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -368,10 +390,10 @@ export default function LoginScreen({ onLoginSuccess }) {
               {isLoading ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator color="#FFFFFF" size="small" />
-                  <Text style={styles.actionButtonText}> Sending OTP...</Text>
+                  <Text style={styles.actionButtonText}> {t.sendingOtp}</Text>
                 </View>
               ) : (
-                <Text style={styles.actionButtonText}>Login</Text>
+                <Text style={styles.actionButtonText}>{t.sendOtpButton}</Text>
               )}
             </TouchableOpacity>
           ) : (
@@ -384,15 +406,60 @@ export default function LoginScreen({ onLoginSuccess }) {
               {isVerifying ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator color="#FFFFFF" size="small" />
-                  <Text style={styles.actionButtonText}> Verifying OTP...</Text>
+                  <Text style={styles.actionButtonText}> {t.verifyingOtp}</Text>
                 </View>
               ) : (
-                <Text style={styles.actionButtonText}>Verify & Login</Text>
+                <Text style={styles.actionButtonText}>{t.verifyProceedButton}</Text>
               )}
             </TouchableOpacity>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* LANGUAGE SELECTOR MODAL */}
+      <Modal
+        visible={isLangModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsLangModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsLangModalVisible(false)}
+        >
+          <View style={styles.langModalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t.selectLanguageTitle}</Text>
+            </View>
+            {AVAILABLE_LANGUAGES.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.langOptionItem,
+                  (language === lang.code) && styles.selectedLangItem,
+                ]}
+                onPress={() => {
+                  if (onLanguageChange) onLanguageChange(lang.code);
+                  setIsLangModalVisible(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.langOptionText,
+                    (language === lang.code) && styles.selectedLangText,
+                  ]}
+                >
+                  {lang.native} ({lang.label})
+                </Text>
+                {language === lang.code && (
+                  <Text style={styles.selectedCheckmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -794,5 +861,100 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  /* --- TOP LANGUAGE SELECTOR --- */
+  topLanguageRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 12 : 10,
+    zIndex: 20,
+  },
+  loginLangPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#C8DEC8',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  loginLangGlobe: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  loginLangText: {
+    fontSize: 12.5,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    letterSpacing: 0.5,
+  },
+  loginLangArrow: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    marginLeft: 6,
+  },
+
+  /* --- LANGUAGE MODAL STYLES --- */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  langModalContainer: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    elevation: 6,
+  },
+  modalHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E8E8',
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+    textAlign: 'center',
+  },
+  langOptionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginVertical: 3,
+  },
+  selectedLangItem: {
+    backgroundColor: '#E8F5E9',
+  },
+  langOptionText: {
+    fontSize: 15,
+    color: '#2E3B2E',
+    fontWeight: '600',
+  },
+  selectedLangText: {
+    color: '#1B5E20',
+    fontWeight: 'bold',
+  },
+  selectedCheckmark: {
+    color: '#1B5E20',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

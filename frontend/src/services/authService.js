@@ -39,8 +39,8 @@ export const authService = {
       console.error('Network/Request error in requestOtp:', error);
       return {
         success: false,
-        present: false,
-        message: 'Unable to connect to server. Please ensure the backend is running.',
+        present: null,
+        message: 'Unable to connect to backend server. Please check your network and ensure backend is running.',
       };
     }
   },

@@ -52,6 +52,8 @@ const registerFarmer = async (req, res) => {
                 }
             );
 
+            console.log(`\n🔑 [DEV TEST OTP]: Farmer: ${existingFarmer.Name} | Phone: ${phoneNumber} | OTP: ${otp}\n`);
+
             /*await smsProvider.send(phoneNumber, `Your OTP is: ${otp}. It will expire in 5 minutes.`); */
 
             return res.status(200).json({

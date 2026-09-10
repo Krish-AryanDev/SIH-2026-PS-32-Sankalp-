@@ -8,26 +8,41 @@ dotenv.config();
 
 async function slot(req, res) {
   try {
-    const { date, crop_type, pincode } = req.body;
+    const date = req.body?.date || req.query?.date;
+    const crop_type = req.body?.crop_type || req.query?.crop_type;
+    const pincode = req.body?.pincode || req.query?.pincode;
 
     if (!date  || !crop_type || !pincode) {
       return res.status(400).json({
-        message: "farmer_id, date or range or required",
+        message: "pincode, date and crop_type are required",
         success: false,
       });
     }
 
-    //searching nearby procurement centers based on pincode and active status
-    // add name attribute 
-    const { data, error } = await supabase
+    // Format crop_type for array matching
+    const formattedCrop = crop_type.charAt(0).toUpperCase() + crop_type.slice(1).toLowerCase();
+
+    // Searching nearby procurement centers based on pincode and active status
+    let { data, error } = await supabase
       .from("procurement_centres")
-      .select("centrecode , address")
+      .select("centrecode, address, district")
       .eq("pincode", pincode)
       .eq("status", "active")
-      // Use .contains() to check if the targetCrop exists inside the crop_available text array
-      .contains("crop_available", [crop_type]);
+      .contains("crop_available", [formattedCrop]);
 
-    if (error) {
+    // If no exact match with formatted crop, try lowercase or all active centers for this pincode
+    if (!data || data.length === 0) {
+      const fallback = await supabase
+        .from("procurement_centres")
+        .select("centrecode, address, district")
+        .eq("pincode", pincode)
+        .eq("status", "active");
+      if (fallback.data && fallback.data.length > 0) {
+        data = fallback.data;
+      }
+    }
+
+    if (error && (!data || data.length === 0)) {
       return res.status(500).json({
         message: "Error fetching procurement centers",
         success: false,
@@ -38,17 +53,25 @@ async function slot(req, res) {
     res.status(200).json({
       message: "Procurement centers fetched successfully",
       success: true,
-      data: data,
+      data: data || [],
     });
   } catch (e) {
-    console.log("Error in slot controller");
-    console.log(e);
+    console.log("Error in slot controller", e);
+    return res.status(500).json({
+      message: "Internal server error",
+      success: false,
+      error: e.message,
+    });
   }
 }
 
 async function check_availability(req, res) {
   try {
-    const { centercode, date, session, crop_type, qtyrange } = req.body;
+    const centercode = req.body?.centercode || req.query?.centercode;
+    const date = req.body?.date || req.query?.date;
+    const session = req.body?.session || req.query?.session;
+    const crop_type = req.body?.crop_type || req.query?.crop_type || req.body?.croptype || req.query?.croptype;
+    const qtyrange = req.body?.qtyrange || req.query?.qtyrange;
 
     // 1. Validate required fields
     if (!centercode || !date || !session || !qtyrange) {
@@ -56,6 +79,31 @@ async function check_availability(req, res) {
         message: "centercode, date, session and qtyrange are required",
         success: false,
       });
+    }
+
+    // Check if authenticated farmer already has an active booked slot
+    const farmerId = req.farmer?.farmerID || req.farmer?._id?.toString();
+    if (farmerId) {
+      const { data: activePass } = await supabase
+        .from("procurements")
+        .select("procurement_id, slot_date, slot_time")
+        .eq("farmer_id", farmerId)
+        .neq("status", "cancelled")
+        .limit(1);
+
+      if (activePass && activePass.length > 0) {
+        return res.status(200).json({
+          success: true,
+          message: `You already have an active Gate Pass scheduled for ${activePass[0].slot_date} (${activePass[0].slot_time}).`,
+          data: {
+            canBook: false,
+            alreadyBooked: true,
+            activeBooking: activePass[0],
+            session: session,
+            note: "Existing active gate pass must be completed or cancelled before booking another slot.",
+          },
+        });
+      }
     }
 
     // 2. Parse quantity range (convert strings to numbers)
@@ -70,13 +118,20 @@ async function check_availability(req, res) {
       });
     }
 
-    // 3. Fetch from Supabase
-    const { data, error } = await supabase
+    // 3. Fetch from Supabase with flexible crop case
+    const formattedCrop = crop_type ? (crop_type.charAt(0).toUpperCase() + crop_type.slice(1).toLowerCase()) : null;
+
+    let query = supabase
       .from("center_slots")
       .select("slots")
       .eq("center_code", centercode)
-      .eq("date", date)
-      .eq("crop_available", crop_type);
+      .eq("date", date);
+
+    if (formattedCrop) {
+      query = query.or(`crop_available.eq.${formattedCrop},crop_available.eq.${crop_type.toLowerCase()}`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return res.status(500).json({
@@ -86,25 +141,27 @@ async function check_availability(req, res) {
       });
     }
 
-    // 4. Handle no data case
-    if (!data || data.length === 0) {
-      return res.status(404).json({
-        message: "No slot data found for this center, date, and crop",
-        success: false,
-      });
+    // 4. Extract slots or use standard open slots if not yet configured in DB
+    const DEFAULT_SLOTS = {
+      "08:00-10:00": { available: 50, booked: 0, popularity: 0.5 },
+      "10:00-12:00": { available: 50, booked: 0, popularity: 0.5 },
+      "12:30-2:30": { available: 50, booked: 0, popularity: 0.5 },
+      "2:30-4:30": { available: 50, booked: 0, popularity: 0.5 },
+      "4:30-6:00": { available: 50, booked: 0, popularity: 0.5 },
+    };
+
+    let slots = DEFAULT_SLOTS;
+    if (data && data.length > 0 && data[0]?.slots) {
+      slots = data[0].slots.slots || data[0].slots;
     }
 
-    // 5. Extract slots (FIX: No const reassignment bug)
-    const record = data[0];
-    const slots = record.slots.slots;
-
-    // 6. Define which slots belong to the session
+    // 5. Define which slots belong to the session
     const sessionSlotKeys =
       session === "morning"
         ? ["08:00-10:00", "10:00-12:00"]
         : ["12:30-2:30", "2:30-4:30", "4:30-6:00"];
 
-    // 7. Apply 10% buffer and check each slot INDIVIDUALLY
+    // 6. Apply 10% buffer and check each slot INDIVIDUALLY
     const BUFFER_PERCENT = 0.1;
     let canBook = false;
 
@@ -241,8 +298,11 @@ async function check_availability(req, res) {
 
 async function book(req, res) {
     try {
-      const { farmer_id, centercode, date, session, croptype, qtyrange } =
+      const { farmer_id: bodyFarmerId, centercode, date, session, croptype, qtyrange } =
         req.body;
+
+      // Extract farmer identifier from authenticated farmer (attached by authMiddleware) or fallback to body
+      const farmer_id = req.farmer?.farmerID || req.farmer?._id?.toString() || bodyFarmerId || null;
 
       // --- 1. Validation ---
       if (!centercode || !date || !session || !qtyrange || !croptype) {
@@ -251,6 +311,27 @@ async function book(req, res) {
             "centercode, date, session, croptype and qtyrange are required",
           success: false,
         });
+      }
+
+      // --- 1.1 Prevent booking if farmer already has an active slot ---
+      if (farmer_id) {
+        const { data: activePass, error: passError } = await supabase
+          .from("procurements")
+          .select("procurement_id, slot_date, slot_time, token, status")
+          .eq("farmer_id", farmer_id)
+          .neq("status", "cancelled")
+          .limit(1);
+
+        if (activePass && activePass.length > 0) {
+          const active = activePass[0];
+          return res.status(409).json({
+            success: false,
+            canBook: false,
+            alreadyBooked: true,
+            message: `You already have an active Gate Pass scheduled for ${active.slot_date} (${active.slot_time}). You cannot book another slot while this pass is active. Please cancel your existing booking first.`,
+            activeBooking: active,
+          });
+        }
       }
 
       // --- 2. Parse & validate quantity range ---
@@ -273,12 +354,13 @@ async function book(req, res) {
       }
 
       // --- 3. Fetch current slot data (read-only — used for scoring/ranking only) ---
+      const formattedCrop = croptype.charAt(0).toUpperCase() + croptype.slice(1).toLowerCase();
       const { data, error } = await supabase
         .from("center_slots")
         .select("slots")
         .eq("center_code", centercode)
         .eq("date", date)
-        .eq("crop_available", croptype);
+        .or(`crop_available.eq.${formattedCrop},crop_available.eq.${croptype.toLowerCase()}`);
        console.log("BOOK - Query result data:", JSON.stringify(data, null, 2));
        if (data && data.length > 0) {
          console.log("BOOK - record:", JSON.stringify(data[0], null, 2));
@@ -293,24 +375,32 @@ async function book(req, res) {
         });
       }
       if (!data || data.length === 0) {
-        return res.status(404).json({
-          message:
-            "No slot configuration found for this center, date, and crop",
-          success: false,
-        });
+        const initialSlots = {
+          "08:00-10:00": { available: 50, booked: 0, popularity: 0.5 },
+          "10:00-12:00": { available: 50, booked: 0, popularity: 0.5 },
+          "12:30-2:30": { available: 50, booked: 0, popularity: 0.5 },
+          "2:30-4:30": { available: 50, booked: 0, popularity: 0.5 },
+          "4:30-6:00": { available: 50, booked: 0, popularity: 0.5 },
+        };
+
+        const { data: inserted } = await supabase
+          .from("center_slots")
+          .insert({
+            center_code: centercode,
+            crop_available: formattedCrop,
+            date: date,
+            slots: initialSlots,
+          })
+          .select("slots");
+
+        if (inserted && inserted.length > 0) {
+          data = inserted;
+        } else {
+          data = [{ slots: initialSlots }];
+        }
       }
 
-      const slots = data[0].slots;
-      if (
-        !slots ||
-        typeof slots !== "object" ||
-        Object.keys(slots).length === 0
-      ) {
-        return res.status(404).json({
-          message: "Slot data is empty or corrupted.",
-          success: false,
-        });
-      }
+      const slots = data[0].slots?.slots || data[0].slots || {};
 
       // --- 4. Candidate slots for the requested session ---
       const sessionSlotKeys = SESSION_SLOTS[session];
@@ -429,6 +519,108 @@ async function book(req, res) {
         success: false,
         error: error.message,
       });
+    }
 }
+
+async function get_active_pass(req, res) {
+  try {
+    const farmerId = req.farmer?.farmerID || req.farmer?._id?.toString();
+    if (!farmerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Farmer identity not found",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("procurements")
+      .select("*, procurement_centres(address, district)")
+      .eq("farmer_id", farmerId)
+      .neq("status", "cancelled")
+      .order("procurement_id", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(200).json({
+        success: true,
+        booking: null,
+      });
+    }
+
+    const b = data[0];
+    return res.status(200).json({
+      success: true,
+      booking: {
+        procurement_id: b.procurement_id,
+        farmer_id: b.farmer_id,
+        centreCode: b.centre_code,
+        centreName: b.procurement_centres?.address || b.centre_code,
+        district: b.procurement_centres?.district,
+        date: b.slot_date,
+        assignedSlot: b.slot_time,
+        crop: b.crop,
+        token: b.token || `GATE-PASS-${b.procurement_id}`,
+        queuePosition: b.queue_position,
+        status: b.status,
+      },
+    });
+  } catch (e) {
+    return res.status(500).json({
+      success: false,
+      message: e.message,
+    });
+  }
 }
-module.exports = { slot, check_availability, book };
+
+async function cancel_booking(req, res) {
+  try {
+    const farmerId = req.farmer?.farmerID || req.farmer?._id?.toString();
+    const procurementId = req.body?.procurement_id;
+
+    if (!farmerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Farmer identity not found",
+      });
+    }
+
+    let query = supabase.from("procurements").update({ status: "cancelled" });
+
+    if (procurementId) {
+      query = query.eq("procurement_id", procurementId).eq("farmer_id", farmerId);
+    } else {
+      query = query.eq("farmer_id", farmerId).neq("status", "cancelled");
+    }
+
+    const { data, error } = await query.select();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error cancelling slot booking",
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Slot booking cancelled successfully.",
+      data,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: e.message,
+    });
+  }
+}
+
+module.exports = { slot, check_availability, book, get_active_pass, cancel_booking };
